@@ -1,0 +1,6 @@
+{
+  "name": "Dashboard Saúde Vilhena",
+  "description": "Painel de controle para acompanhamento de repasses financeiros e downloads de documentos da saúde de Vilhena.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
