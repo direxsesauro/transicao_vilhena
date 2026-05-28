@@ -98,7 +98,7 @@ export default function App() {
   }, []);
 
   // CRUD --- REPASSES
-  const handleAddRepasse = async (mes_ano: string, valor: number, observacoes: string) => {
+  const handleAddRepasse = async (mes_ano: string, valor: number, observacoes: string, data_documento: string) => {
     setIsLoading(true);
     const supabase = getSupabaseClient();
 
@@ -106,7 +106,7 @@ export default function App() {
       try {
         const { error } = await supabase
           .from('repasses')
-          .insert([{ mes_ano, valor, observacoes }]);
+          .insert([{ mes_ano, valor, observacoes, data_documento }]);
 
         if (error) throw error;
 
@@ -121,7 +121,7 @@ export default function App() {
     setIsLoading(false);
   };
 
-  const handleUpdateRepasse = async (id: string, mes_ano: string, valor: number, observacoes: string) => {
+  const handleUpdateRepasse = async (id: string, mes_ano: string, valor: number, observacoes: string, data_documento: string) => {
     setIsLoading(true);
     const supabase = getSupabaseClient();
 
@@ -129,7 +129,7 @@ export default function App() {
       try {
         const { data: updatedRows, error } = await supabase
           .from('repasses')
-          .update({ mes_ano, valor, observacoes })
+          .update({ mes_ano, valor, observacoes, data_documento })
           .eq('id', id)
           .select();
 
@@ -172,7 +172,7 @@ export default function App() {
   };
 
   // CRUD --- MAIS SAÚDE
-  const handleAddMaisSaude = async (mes_ano: string, valor: number, observacoes: string) => {
+  const handleAddMaisSaude = async (mes_ano: string, valor: number, observacoes: string, data_documento: string) => {
     setIsLoading(true);
     const supabase = getSupabaseClient();
 
@@ -180,7 +180,7 @@ export default function App() {
       try {
         const { error } = await supabase
           .from('mais_saude')
-          .insert([{ mes_ano, valor, observacoes }]);
+          .insert([{ mes_ano, valor, observacoes, data_documento }]);
 
         if (error) throw error;
 
@@ -194,7 +194,7 @@ export default function App() {
     setIsLoading(false);
   };
 
-  const handleUpdateMaisSaude = async (id: string, mes_ano: string, valor: number, observacoes: string) => {
+  const handleUpdateMaisSaude = async (id: string, mes_ano: string, valor: number, observacoes: string, data_documento: string) => {
     setIsLoading(true);
     const supabase = getSupabaseClient();
 
@@ -202,7 +202,7 @@ export default function App() {
       try {
         const { data: updatedRows, error } = await supabase
           .from('mais_saude')
-          .update({ mes_ano, valor, observacoes })
+          .update({ mes_ano, valor, observacoes, data_documento })
           .eq('id', id)
           .select();
 

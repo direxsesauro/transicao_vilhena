@@ -3,6 +3,7 @@ export interface Repasse {
   mes_ano: string; // Formato "YYYY-MM"
   valor: number;
   observacoes: string;
+  data_documento: string; // Formato "YYYY-MM-DD"
   created_at: string;
 }
 
@@ -11,6 +12,7 @@ export interface MaisSaude {
   mes_ano: string; // Formato "YYYY-MM"
   valor: number;
   observacoes: string;
+  data_documento: string; // Formato "YYYY-MM-DD"
   created_at: string;
 }
 

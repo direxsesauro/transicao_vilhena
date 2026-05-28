@@ -30,8 +30,8 @@ import { MaisSaude } from '../types';
 
 interface MaisSaudeSectionProps {
   data: MaisSaude[];
-  onAdd: (mes_ano: string, valor: number, observacoes: string) => Promise<void>;
-  onUpdate: (id: string, mes_ano: string, valor: number, observacoes: string) => Promise<void>;
+  onAdd: (mes_ano: string, valor: number, observacoes: string, data_documento: string) => Promise<void>;
+  onUpdate: (id: string, mes_ano: string, valor: number, observacoes: string, data_documento: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   isLoading: boolean;
 }
@@ -48,6 +48,7 @@ export default function MaisSaudeSection({
   const [selectedYear, setSelectedYear] = useState('2026');
   const [valorInput, setValorInput] = useState('');
   const [obsInput, setObsInput] = useState('');
+  const [dataDocInput, setDataDocInput] = useState('');
   
   // Estado para filtros e visuais
   const [chartType, setChartType] = useState<'area' | 'bar'>('area');
@@ -58,6 +59,7 @@ export default function MaisSaudeSection({
   const [editYear, setEditYear] = useState('2026');
   const [editValor, setEditValor] = useState('');
   const [editObs, setEditObs] = useState('');
+  const [editDataDoc, setEditDataDoc] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -147,7 +149,7 @@ export default function MaisSaudeSection({
 
     const compiledMesAno = `${editYear}-${editMonth}`;
     try {
-      await onUpdate(editId, compiledMesAno, numericVal, editObs || 'Sem observações adicionais');
+      await onUpdate(editId, compiledMesAno, numericVal, editObs || 'Sem observações adicionais', editDataDoc);
       setSuccessMsg('Investimento Mais Saúde atualizado com sucesso!');
       setTimeout(() => setSuccessMsg(''), 4000);
       setEditOpen(false);
@@ -167,7 +169,7 @@ export default function MaisSaudeSection({
     }
     const compiledMesAno = `${selectedYear}-${selectedMonth}`;
     try {
-      await onAdd(compiledMesAno, numericVal, obsInput);
+      await onAdd(compiledMesAno, numericVal, obsInput, dataDocInput);
       setSuccessMsg('Investimento cadastrado com sucesso!');
       setTimeout(() => setSuccessMsg(''), 4000);
       setFormOpen(false);
@@ -179,8 +181,8 @@ export default function MaisSaudeSection({
   // Exportar dados para CSV
   const handleExportCSV = () => {
     const csvContent = "data:text/csv;charset=utf-8," 
-      + ["Mes/Ano,Fomento (R$),Data Cadastro,Observações"].join(",") + "\n"
-      + data.map(e => `"${e.mes_ano}","${e.valor}","${e.created_at}","${e.observacoes.replace(/"/g, '""')}"`).join("\n");
+      + ["Mes/Ano","Fomento (R$)","Data do documento","Observações"].join(",") + "\n"
+      + data.map(e => `"${e.mes_ano}","${e.valor}","${e.data_documento}","${e.observacoes.replace(/"/g, '""')}"`).join("\n");
     
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -220,11 +222,12 @@ export default function MaisSaudeSection({
 
       {/* Cadastro Form Integrado de Outro Programa */}
       {editOpen && (
-        <form
-          id="edit-mais-saude-form"
-          onSubmit={handleEditSubmit}
-          className="rounded-2xl border border-blue-100 bg-white p-6 shadow-md transition-all dark:border-slate-800 dark:bg-slate-900"
-        >
+  <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+    <form
+      id="edit-mais-saude-form"
+      onSubmit={handleEditSubmit}
+      className="rounded-2xl border border-blue-100 bg-white p-6 shadow-md transition-all dark:border-slate-800 dark:bg-slate-900 max-w-lg w-full mx-4"
+    >
           <div className="flex items-center justify-between border-b pb-4 mb-4 dark:border-slate-800">
             <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
               <Edit className="h-5 w-5 text-blue-500" />
@@ -307,6 +310,19 @@ export default function MaisSaudeSection({
                 className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs dark:bg-slate-800 dark:border-slate-700 text-slate-800 dark:text-slate-200 outline-none focus:border-blue-500"
               />
             </div>
+            <div className="space-y-1.5">
+              <label htmlFor="edit-mais-saude-data-doc" className="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5 text-blue-500" /> Data do Documento
+              </label>
+              <input
+                id="edit-mais-saude-data-doc"
+                type="date"
+                value={editDataDoc}
+                onChange={e => setEditDataDoc(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs dark:bg-slate-800 dark:border-slate-700 text-slate-800 dark:text-slate-200 outline-none focus:border-blue-500"
+                required
+              />
+            </div>
           </div>
 
           {submitError && (
@@ -325,6 +341,7 @@ export default function MaisSaudeSection({
             </button>
           </div>
         </form>
+      </div>
       )}
 
       {formOpen && (
@@ -416,6 +433,19 @@ export default function MaisSaudeSection({
                 value={obsInput}
                 onChange={(e) => setObsInput(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs dark:bg-slate-800 dark:border-slate-700 text-slate-800 dark:text-slate-200 outline-none focus:border-emerald-500"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="input-ms-data-doc" className="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5 text-emerald-500" /> Data do Documento
+              </label>
+              <input
+                id="input-ms-data-doc"
+                type="date"
+                value={dataDocInput}
+                onChange={(e) => setDataDocInput(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs dark:bg-slate-800 dark:border-slate-700 text-slate-800 dark:text-slate-200 outline-none focus:border-emerald-500"
+                required
               />
             </div>
           </div>
@@ -622,7 +652,7 @@ export default function MaisSaudeSection({
               <tr>
                 <th className="px-5 py-3.5">Mês / Ano Ref</th>
                 <th className="px-5 py-3.5">Valor do Investimento</th>
-                <th className="px-5 py-3.5">Criado em</th>
+                <th className="px-5 py-3.5">Data do documento</th>
                 <th className="px-5 py-3.5">Detalhamento da Aplicação</th>
                 <th className="px-5 py-3.5 text-center">Ações</th>
               </tr>
@@ -649,7 +679,7 @@ export default function MaisSaudeSection({
                         </span>
                       </td>
                       <td className="px-5 py-3.5 text-[10px] text-slate-400 font-mono">
-                        {new Date(item.created_at).toLocaleDateString('pt-BR')}
+                        {item.data_documento ? new Date(item.data_documento).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : '-'}
                       </td>
                       <td className="px-5 py-3.5 text-xs text-slate-500 max-w-sm truncate dark:text-slate-400" title={item.observacoes}>
                         {item.observacoes}
@@ -664,6 +694,7 @@ export default function MaisSaudeSection({
                             setEditMonth(month);
                             setEditValor(item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
                             setEditObs(item.observacoes);
+                            setEditDataDoc(item.data_documento || '');
                             setEditOpen(true);
                           }}
                           className="mr-2 rounded p-1 text-slate-400 hover:bg-blue-50 hover:text-blue-500 dark:hover:bg-blue-950/20 dark:hover:text-blue-400 transition"
