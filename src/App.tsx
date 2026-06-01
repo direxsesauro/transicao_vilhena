@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   getSupabaseClient
 } from './supabase';
-import { Repasse, MaisSaude, DownloadItem, DocumentType } from './types';
+import { Repasse, MaisSaude, DownloadItem, DocumentType, PlanoTrabalho } from './types';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import RepassesSection from './components/RepassesSection';
@@ -29,6 +29,7 @@ export default function App() {
   const [repasses, setRepasses] = useState<Repasse[]>([]);
   const [maisSaude, setMaisSaude] = useState<MaisSaude[]>([]);
   const [downloads, setDownloads] = useState<DownloadItem[]>([]);
+  const [planosTrabalho, setPlanosTrabalho] = useState<PlanoTrabalho[]>([]);
 
   // Estados de navegação e UI
   const [activeSection, setActiveSection] = useState<string>('repasses');
@@ -82,9 +83,13 @@ export default function App() {
           const { data: dlData, error: dlError } = await supabase.from('downloads').select('*');
           if (dlError) throw dlError;
 
+          const { data: ptData, error: ptError } = await supabase.from('planos_trabalho').select('*');
+          if (ptError) throw ptError;
+
           setRepasses(repData || []);
           setMaisSaude(msData || []);
           setDownloads(dlData || []);
+          setPlanosTrabalho(ptData || []);
 
         } catch (err: any) {
           console.error('Falha ao sincronizar com Supabase.', err);
@@ -166,6 +171,29 @@ export default function App() {
         setRepasses(repasses.filter(r => r.id !== id));
       } catch (err: any) {
         console.error('Erro ao deletar:', err);
+      }
+    }
+    setIsLoading(false);
+  };
+
+  // CRUD --- PLANOS DE TRABALHO
+  const handleAddPlanoTrabalho = async (descricao: string, valor: number, data_vigencia: string) => {
+    setIsLoading(true);
+    const supabase = getSupabaseClient();
+
+    if (supabase) {
+      try {
+        const { error } = await supabase
+          .from('planos_trabalho')
+          .insert([{ descricao, valor, data_vigencia }]);
+
+        if (error) throw error;
+
+        const { data } = await supabase.from('planos_trabalho').select('*');
+        setPlanosTrabalho(data || []);
+      } catch (err: any) {
+        setIsLoading(false);
+        throw new Error(err.message || 'Erro ao cadastrar plano de trabalho.');
       }
     }
     setIsLoading(false);
@@ -403,9 +431,11 @@ export default function App() {
         return (
           <RepassesSection
             data={repasses}
+            planos={planosTrabalho}
             onAdd={handleAddRepasse}
             onUpdate={handleUpdateRepasse}
             onDelete={handleDeleteRepasse}
+            onAddPlano={handleAddPlanoTrabalho}
             isLoading={isLoading}
           />
         );

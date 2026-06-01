@@ -27,22 +27,25 @@ import {
   Tooltip,
   Legend
 } from 'recharts';
-import { Repasse } from '../types';
-
+import { Repasse, PlanoTrabalho } from '../types';
 
 interface RepassesSectionProps {
   data: Repasse[];
+  planos?: PlanoTrabalho[];
   onAdd: (mes_ano: string, valor: number, observacoes: string, data_documento: string) => Promise<void>;
   onUpdate: (id: string, mes_ano: string, valor: number, observacoes: string, data_documento: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onAddPlano?: (descricao: string, valor: number, data_vigencia: string) => Promise<void>;
   isLoading: boolean;
 }
 
 export default function RepassesSection({
   data,
+  planos = [],
   onAdd,
   onUpdate,
   onDelete,
+  onAddPlano,
   isLoading
 }: RepassesSectionProps) {
   // Estados para o formulário
@@ -53,7 +56,7 @@ export default function RepassesSection({
   const [dataDocInput, setDataDocInput] = useState('');
 
   // Estado para filtros e visuais
-  const [chartType, setChartType] = useState<'area' | 'bar'>('area');
+  const [chartType, setChartType] = useState<'area' | 'bar'>('bar');
   const [searchTerm, setSearchTerm] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -65,6 +68,12 @@ export default function RepassesSection({
   const [editDataDoc, setEditDataDoc] = useState('');
   const [submitError, setSubmitError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  // Estados para Plano de Trabalho
+  const [planoFormOpen, setPlanoFormOpen] = useState(false);
+  const [planoDescricao, setPlanoDescricao] = useState('');
+  const [planoValor, setPlanoValor] = useState('');
+  const [planoDataVigencia, setPlanoDataVigencia] = useState('');
 
   // Anos de 2024 a 2027
   const years = ['2024', '2025', '2026', '2027'];
@@ -84,32 +93,47 @@ export default function RepassesSection({
   ];
 
   // Agrupamento e ordenação cronológica dos dados para o gráfico
-  const formattedChartData = useMemo(() => {
-    // Agrupa repasses do mesmo mês somando os valores
+  const { chartData, maxRepasses } = useMemo(() => {
+    // Agrupa repasses do mesmo mês
     const grouped = data.reduce((acc, curr) => {
       if (!acc[curr.mes_ano]) {
-        acc[curr.mes_ano] = { ...curr, valor: 0 };
+        acc[curr.mes_ano] = { mes_ano: curr.mes_ano, items: [] };
       }
-      acc[curr.mes_ano].valor += curr.valor;
+      acc[curr.mes_ano].items.push(curr);
       return acc;
-    }, {} as Record<string, Repasse>);
+    }, {} as Record<string, { mes_ano: string, items: Repasse[] }>);
 
     // Ordena por mês/ano
     const sortedArray = Object.values(grouped).sort((a, b) => a.mes_ano.localeCompare(b.mes_ano));
 
+    let maxRep = 0;
     // Formata os meses para o gráfico (Ex: "Jan/25")
-    return sortedArray.map(item => {
-      const [year, month] = item.mes_ano.split('-');
+    const formatted = sortedArray.map(group => {
+      const [year, month] = group.mes_ano.split('-');
       const monthNamesAbbr: { [key: string]: string } = {
         '01': 'Jan', '02': 'Fev', '03': 'Mar', '04': 'Abr', '05': 'Mai', '06': 'Jun',
         '07': 'Jul', '08': 'Ago', '09': 'Set', '10': 'Out', '11': 'Nov', '12': 'Dez'
       };
-      return {
-        ...item,
+      
+      const item: any = {
         name: `${monthNamesAbbr[month]}/${year.substring(2)}`,
-        'Repasse (R$)': item.valor
+        'Repasse Total': group.items.reduce((sum, r) => sum + r.valor, 0)
       };
+
+      const sortedItems = [...group.items].sort((a, b) => a.data_documento.localeCompare(b.data_documento));
+
+      sortedItems.forEach((r, idx) => {
+        item[`Repasse ${idx + 1}`] = r.valor;
+      });
+
+      if (sortedItems.length > maxRep) {
+        maxRep = sortedItems.length;
+      }
+
+      return item;
     });
+
+    return { chartData: formatted, maxRepasses: maxRep };
   }, [data]);
 
   // Ordenação reversa (mais recente primeiro) para a tabela
@@ -127,17 +151,27 @@ export default function RepassesSection({
 
   // Estatísticas calculadas
   const stats = useMemo(() => {
-    if (data.length === 0) return { total: 0, media: 0, max: 0, count: 0 };
-    const total = data.reduce((acc, curr) => acc + curr.valor, 0);
-    const media = total / data.length;
-    const max = Math.max(...data.map(d => d.valor));
+    const totalAcumulado = data.reduce((acc, curr) => acc + curr.valor, 0);
+    const media = data.length > 0 ? totalAcumulado / data.length : 0;
+    const max = data.length > 0 ? Math.max(...data.map(d => d.valor)) : 0;
+    
+    const plano2025 = planos.filter(p => p.data_vigencia?.startsWith('2025')).reduce((acc, p) => acc + p.valor, 0);
+    const plano2026 = planos.filter(p => p.data_vigencia?.startsWith('2026')).reduce((acc, p) => acc + p.valor, 0);
+    const repasses2025 = data.filter(r => r.mes_ano.startsWith('2025')).reduce((acc, r) => acc + r.valor, 0);
+    const repasses2026 = data.filter(r => r.mes_ano.startsWith('2026')).reduce((acc, r) => acc + r.valor, 0);
+    const restante2026 = plano2026 - repasses2026;
+
     return {
-      total,
+      total: totalAcumulado,
       media,
       max,
-      count: data.length
+      count: data.length,
+      plano2025,
+      plano2026,
+      repasses2025,
+      restante2026
     };
-  }, [data]);
+  }, [data, planos]);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -200,6 +234,34 @@ export default function RepassesSection({
     }
   };
 
+  const handlePlanoSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitError('');
+    setSuccessMsg('');
+    const numericVal = parseFloat(planoValor.replace(/\./g, '').replace(',', '.'));
+    if (isNaN(numericVal) || numericVal <= 0) {
+      setSubmitError('Por favor, informe um valor numérico válido e maior que zero para o plano.');
+      return;
+    }
+    if (!planoDescricao || !planoDataVigencia) {
+      setSubmitError('Preencha a descrição e a data de vigência do plano.');
+      return;
+    }
+    try {
+      if (onAddPlano) {
+        await onAddPlano(planoDescricao, numericVal, planoDataVigencia);
+      }
+      setSuccessMsg('Plano de trabalho cadastrado com sucesso!');
+      setTimeout(() => setSuccessMsg(''), 4000);
+      setPlanoFormOpen(false);
+      setPlanoDescricao('');
+      setPlanoValor('');
+      setPlanoDataVigencia('');
+    } catch (err: any) {
+      setSubmitError(err.message || 'Erro ao cadastrar plano de trabalho.');
+    }
+  };
+
 
   return (
     <div id="repasses-panel" className="space-y-6">
@@ -216,14 +278,23 @@ export default function RepassesSection({
               Monitore os recursos transferidos mensalmente ao município de Vilhena sob o Termo de Cooperação SESAU.
             </p>
           </div>
-          <button
-            id="toggle-add-repasse-form"
-            onClick={() => setFormOpen(!formOpen)}
-            className="flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-blue-700 shadow-sm transition hover:bg-blue-50 active:scale-95"
-          >
-            <Plus className="h-4 w-4" />
-            Cadastrar Repasse
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              onClick={() => setPlanoFormOpen(!planoFormOpen)}
+              className="flex items-center justify-center gap-2 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/40 px-4 py-2.5 text-sm font-bold text-indigo-50 border border-indigo-400/30 transition active:scale-95"
+            >
+              <Plus className="h-4 w-4" />
+              Cadastrar Plano
+            </button>
+            <button
+              id="toggle-add-repasse-form"
+              onClick={() => setFormOpen(!formOpen)}
+              className="flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-blue-700 shadow-sm transition hover:bg-blue-50 active:scale-95"
+            >
+              <Plus className="h-4 w-4" />
+              Cadastrar Repasse
+            </button>
+          </div>
         </div>
         <div id="blue-decoration-circle" className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/5 blur-2xl"></div>
       </div>
@@ -342,6 +413,109 @@ export default function RepassesSection({
             </div>
           </form>
         </div>
+      )}
+
+      {/* Cadastro Form Plano de Trabalho */}
+      {planoFormOpen && (
+        <form
+          id="add-plano-form"
+          onSubmit={handlePlanoSubmit}
+          className="rounded-2xl border border-indigo-100 bg-white p-6 shadow-md transition-all dark:border-slate-800 dark:bg-slate-900 mb-6"
+        >
+          <div className="flex items-center justify-between border-b pb-4 mb-4 dark:border-slate-800">
+            <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
+              <Plus className="h-5 w-5 text-indigo-500" />
+              Novo Plano de Trabalho
+            </h3>
+            <button
+              type="button"
+              onClick={() => setPlanoFormOpen(false)}
+              className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-medium"
+            >
+              Cancelar
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+            <div className="space-y-1.5 md:col-span-1">
+              <label htmlFor="input-plano-descricao" className="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5 text-indigo-500" /> Descrição
+              </label>
+              <input
+                id="input-plano-descricao"
+                type="text"
+                placeholder="Ex. Plano Diretor de 2026..."
+                value={planoDescricao}
+                onChange={(e) => setPlanoDescricao(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs dark:bg-slate-800 dark:border-slate-700 text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500"
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="input-plano-valor" className="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                <DollarSign className="h-3.5 w-3.5 text-indigo-500" /> Valor Pactuado (R$)
+              </label>
+              <div className="relative">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">R$</span>
+                <input
+                  id="input-plano-valor"
+                  type="text"
+                  placeholder="0,00"
+                  value={planoValor}
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/\D/g, '');
+                    if (!raw) {
+                      setPlanoValor('');
+                      return;
+                    }
+                    const num = parseInt(raw) / 100;
+                    setPlanoValor(num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                  }}
+                  className="w-full pl-9 pr-3.5 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs dark:bg-slate-800 dark:border-slate-700 text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 font-semibold"
+                  required
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="input-plano-data" className="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5 text-indigo-500" /> Data de Vigência
+              </label>
+              <input
+                id="input-plano-data"
+                type="date"
+                value={planoDataVigencia}
+                onChange={(e) => setPlanoDataVigencia(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs dark:bg-slate-800 dark:border-slate-700 text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500"
+                required
+              />
+            </div>
+          </div>
+
+          {submitError && (
+            <div className="mt-4 flex items-center gap-2 rounded-lg bg-red-50 p-3 text-xs font-semibold text-red-700 dark:bg-red-950/20 dark:text-red-400 border border-red-200/50">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{submitError}</span>
+            </div>
+          )}
+
+          <div className="mt-4 flex justify-end gap-3.5 border-t border-slate-100 pt-4 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={() => setPlanoFormOpen(false)}
+              className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+            >
+              Fechar
+            </button>
+            <button
+              id="submit-plano"
+              type="submit"
+              disabled={isLoading}
+              className="rounded-lg bg-indigo-600 px-5 py-2 text-xs font-semibold text-white shadow-md transition hover:bg-indigo-700 active:scale-95 disabled:opacity-50"
+            >
+              {isLoading ? 'Salvando...' : 'Salvar Plano'}
+            </button>
+          </div>
+        </form>
       )}
 
       {/* Cadastro Form Integrado */}
@@ -493,34 +667,34 @@ export default function RepassesSection({
           <p className="mt-1 text-lg font-extrabold text-slate-800 dark:text-slate-100">{formatCurrency(stats.total)}</p>
           <div className="mt-2.5 flex items-center gap-1.5 text-[9px] text-emerald-600 dark:text-emerald-400">
             <TrendingUp className="h-3 w-3" />
-            <span>Soma de todos os meses</span>
+            <span>Soma de todos os repasses</span>
           </div>
         </div>
 
         <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Média Mensal</p>
-          <p className="mt-1 text-lg font-extrabold text-slate-800 dark:text-slate-100">{formatCurrency(stats.media)}</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Plano Pactuado 2025</p>
+          <p className="mt-1 text-lg font-extrabold text-slate-800 dark:text-slate-100">{formatCurrency(stats.plano2025)}</p>
           <div className="mt-2.5 flex items-center gap-1.5 text-[9px] text-blue-600 dark:text-blue-400">
             <Layers className="h-3 w-3" />
-            <span>Divisão por competência</span>
+            <span>Pago: {formatCurrency(stats.repasses2025)}</span>
           </div>
         </div>
 
         <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Maior Repasse</p>
-          <p className="mt-1 text-lg font-extrabold text-slate-800 dark:text-slate-100">{formatCurrency(stats.max)}</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Plano Pactuado 2026</p>
+          <p className="mt-1 text-lg font-extrabold text-slate-800 dark:text-slate-100">{formatCurrency(stats.plano2026)}</p>
           <div className="mt-2.5 flex items-center gap-1.5 text-[9px] text-indigo-600 dark:text-indigo-400">
             <TrendingUp className="h-3 w-3" />
-            <span>Pico registrado</span>
+            <span>Total aprovado em 2026</span>
           </div>
         </div>
 
         <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Meses Cadastrados</p>
-          <p className="mt-1 text-lg font-extrabold text-slate-800 dark:text-slate-100">{stats.count} meses</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Restante a Pagar 2026</p>
+          <p className="mt-1 text-lg font-extrabold text-slate-800 dark:text-slate-100">{formatCurrency(stats.restante2026)}</p>
           <div className="mt-2.5 flex items-center gap-1.5 text-[9px] text-slate-500">
-            <Calendar className="h-3 w-3" />
-            <span>Histórico operacional</span>
+            <DollarSign className="h-3 w-3" />
+            <span>Saldo do plano subtraindo repasses</span>
           </div>
         </div>
       </div>
@@ -532,6 +706,7 @@ export default function RepassesSection({
             <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Gráfico de Evolução dos Repasses</h3>
             <p className="text-xs text-slate-550 dark:text-slate-400 mt-0.5">Histórico cronológico de depósitos e recursos aplicados</p>
           </div>
+          {/* Gráfico de área desativado temporariamente
           <div className="flex items-center gap-2">
             <button
               onClick={() => setChartType('area')}
@@ -552,9 +727,10 @@ export default function RepassesSection({
               Barras Comparativas
             </button>
           </div>
+          */}
         </div>
 
-        {formattedChartData.length === 0 ? (
+        {chartData.length === 0 ? (
           <div className="flex h-64 flex-col items-center justify-center text-slate-400 dark:text-slate-600">
             <AlertCircle className="h-8 w-8 mb-2" />
             <p className="text-xs font-semibold">Sem dados suficientes para gerar o gráfico</p>
@@ -562,14 +738,7 @@ export default function RepassesSection({
         ) : (
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              {chartType === 'area' ? (
-                <AreaChart data={formattedChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorValor" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
+                <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" className="dark:stroke-slate-800" />
                   <XAxis
                     dataKey="name"
@@ -584,35 +753,20 @@ export default function RepassesSection({
                     tickLine={false}
                   />
                   <Tooltip
-                    formatter={(val) => [formatCurrency(Number(val)), 'Valor Repassado']}
+                    formatter={(val, name) => [formatCurrency(Number(val)), name]}
                     labelStyle={{ color: '#0F172A', fontWeight: 'bold', fontSize: 11 }}
                     contentStyle={{ borderRadius: '0.75rem', border: '1px solid #E2E8F0', fontSize: 11 }}
                   />
-                  <Area type="monotone" dataKey="Repasse (R$)" stroke="#3b82f6" strokeWidth={2.5} fillOpacity={1} fill="url(#colorValor)" />
-                </AreaChart>
-              ) : (
-                <BarChart data={formattedChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" className="dark:stroke-slate-800" />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fontSize: 10, fill: '#64748B' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tickFormatter={(v) => `R$ ${v / 1000}k`}
-                    tick={{ fontSize: 10, fill: '#64748B' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip
-                    formatter={(val) => [formatCurrency(Number(val)), 'Valor Repassado']}
-                    labelStyle={{ color: '#0F172A', fontWeight: 'bold', fontSize: 11 }}
-                    contentStyle={{ borderRadius: '0.75rem', border: '1px solid #E2E8F0', fontSize: 11 }}
-                  />
-                  <Bar dataKey="Repasse (R$)" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={35} />
+                  {Array.from({ length: maxRepasses }).map((_, idx) => (
+                    <Bar 
+                      key={idx} 
+                      dataKey={`Repasse ${idx + 1}`} 
+                      stackId="a" 
+                      fill={['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'][idx % 7]} 
+                      barSize={35} 
+                    />
+                  ))}
                 </BarChart>
-              )}
             </ResponsiveContainer>
           </div>
         )}

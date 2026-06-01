@@ -15,8 +15,8 @@ export default function Sidebar({
   const menuItems = [
     {
       id: 'repasses',
-      label: 'Repasses Financeiros',
-      description: 'Termo de Cooperação 41',
+      label: 'Termo de Cooperação',
+      description: 'Financiamento do Contrato de Gestão',
       icon: Coins,
       color: 'text-blue-500 dark:text-blue-400',
       activeBg: 'bg-blue-50 text-blue-700 border-blue-500 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-400'

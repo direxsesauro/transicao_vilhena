@@ -16,7 +16,15 @@ export interface MaisSaude {
   created_at: string;
 }
 
-export type DocumentType = 'contrato' | 'prestacao' | 'extrato' | 'outro';
+export interface PlanoTrabalho {
+  id: string;
+  descricao: string;
+  valor: number;
+  data_vigencia: string; // Formato "YYYY-MM-DD"
+  created_at: string;
+}
+
+export type DocumentType = 'oficio' | 'ordem_bancaria' | 'outros' | 'parecer_juridico' | 'plano_de_trabalho' | 'portaria' | 'termo_cooperacao';
 
 export interface DownloadItem {
   id: string;

@@ -34,15 +34,20 @@ export default function DownloadsSection({
   isLoading,
   isSupabaseActive
 }: DownloadsSectionProps) {
-  const [selectedType, setSelectedType] = useState<DocumentType>('contrato');
+  const [selectedType, setSelectedType] = useState<DocumentType>('oficio');
   const [searchTerm, setSearchTerm] = useState('');
   const [dragActive, setDragActive] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [uploadSuccess, setUploadSuccess] = useState('');
 
   // Estados para Confirmação de Upload
-  const [fileToUpload, setFileToUpload] = useState<{ file: File, base64: string } | null>(null);
-  const [uploadDescricao, setUploadDescricao] = useState('');
+  interface UploadDraft {
+    file: File;
+    base64: string;
+    tipo: DocumentType;
+    descricao: string;
+  }
+  const [filesToUpload, setFilesToUpload] = useState<UploadDraft[]>([]);
 
   // Estados para Preview do PDF
   const [previewDoc, setPreviewDoc] = useState<DownloadItem | null>(null);
@@ -51,7 +56,7 @@ export default function DownloadsSection({
   // Estados para Edição
   const [docToEdit, setDocToEdit] = useState<DownloadItem | null>(null);
   const [editDescricao, setEditDescricao] = useState('');
-  const [editType, setEditType] = useState<DocumentType>('contrato');
+  const [editType, setEditType] = useState<DocumentType>('oficio');
   const [editFile, setEditFile] = useState<{ file: File, base64: string } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -70,28 +75,46 @@ export default function DownloadsSection({
   // Badge visual para o tipo de documento
   const getDocTypeBadge = (tipo: DocumentType) => {
     switch (tipo) {
-      case 'contrato':
+      case 'oficio':
         return (
           <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2.5 py-1 text-[10px] font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-            Contratos / Aditivos
+            Ofício
           </span>
         );
-      case 'prestacao':
+      case 'ordem_bancaria':
         return (
           <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-            Prestação de Contas
+            Ordem Bancária
           </span>
         );
-      case 'extrato':
+      case 'parecer_juridico':
         return (
           <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-            Extratos de Custeio
+            Parecer Jurídico
+          </span>
+        );
+      case 'plano_de_trabalho':
+        return (
+          <span className="inline-flex items-center gap-1 rounded-md bg-purple-50 px-2.5 py-1 text-[10px] font-semibold text-purple-700 dark:bg-purple-950/40 dark:text-purple-300">
+            Plano de Trabalho
+          </span>
+        );
+      case 'portaria':
+        return (
+          <span className="inline-flex items-center gap-1 rounded-md bg-pink-50 px-2.5 py-1 text-[10px] font-semibold text-pink-700 dark:bg-pink-950/40 dark:text-pink-300">
+            Portaria
+          </span>
+        );
+      case 'termo_cooperacao':
+        return (
+          <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2.5 py-1 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+            Termo de Cooperação e Aditivos
           </span>
         );
       default:
         return (
           <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-            Outros Arquivos
+            Outros
           </span>
         );
     }
@@ -116,73 +139,77 @@ export default function DownloadsSection({
     }
   };
 
-  // Tratar arquivo submetido
-  const processUploadedFile = async (file: File) => {
+  // Tratar múltiplos arquivos submetidos
+  const processUploadedFiles = async (files: FileList | File[] | null) => {
     setUploadError('');
     setUploadSuccess('');
 
-    if (!file) return;
+    if (!files || files.length === 0) return;
 
-    if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
-      setUploadError('Apenas arquivos no formato PDF (.pdf) são permitidos.');
-      return;
+    const validFiles: File[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
+        setUploadError('Apenas arquivos no formato PDF (.pdf) são permitidos.');
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024 && !isSupabaseActive) {
+        setUploadError('Tamanho máximo permitido no modo banco local é de 5MB por arquivo.');
+        return;
+      }
+      validFiles.push(file);
     }
 
-    // Se maior que 5MB e não estiver usando Supabase (limite local storage)
-    if (file.size > 5 * 1024 * 1024 && !isSupabaseActive) {
-      setUploadError('Tamanho máximo permitido no modo banco local é de 5MB. Conecte o Supabase para carregar arquivos maiores no Storage!');
-      return;
+    const drafts: UploadDraft[] = [];
+
+    for (const file of validFiles) {
+      try {
+        const base64Result = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (typeof reader.result === 'string') {
+              resolve(reader.result.split(',')[1] || '');
+            } else {
+              resolve('');
+            }
+          };
+          reader.onerror = () => reject(new Error('Não foi possível ler o arquivo PDF.'));
+          reader.readAsDataURL(file);
+        });
+
+        drafts.push({
+          file,
+          base64: base64Result,
+          tipo: selectedType,
+          descricao: ''
+        });
+      } catch (err: any) {
+        setUploadError(err.message || 'Erro ao processar documento.');
+        return;
+      }
     }
 
-    try {
-      // Ler arquivo em Base64 para garantir resiliência local
-      const reader = new FileReader();
-
-      reader.onload = async () => {
-        let base64Result = '';
-        if (typeof reader.result === 'string') {
-          // Extrai o conteúdo base64 excluindo o cabeçalho data:...
-          base64Result = reader.result.split(',')[1] || '';
-        }
-
-        try {
-          // Em vez de enviar imediatamente, abre o modal de confirmação
-          setFileToUpload({ file, base64: base64Result });
-          setUploadDescricao('');
-        } catch (err: any) {
-          setUploadError(err.message || 'Erro ao processar o documento.');
-        }
-      };
-
-      reader.onerror = () => {
-        setUploadError('Não foi possível ler o arquivo PDF.');
-      };
-
-      reader.readAsDataURL(file);
-
-    } catch (err: any) {
-      setUploadError(err.message || 'Erro ao processar upload.');
-    }
+    setFilesToUpload(prev => [...prev, ...drafts]);
   };
 
   const confirmUpload = async () => {
-    if (!fileToUpload) return;
+    if (filesToUpload.length === 0) return;
     try {
-      await onUpload(
-        fileToUpload.file.name,
-        selectedType,
-        fileToUpload.file.size,
-        fileToUpload.base64,
-        fileToUpload.file,
-        uploadDescricao
-      );
-      setUploadSuccess(`"${fileToUpload.file.name}" carregado com sucesso!`);
+      for (const draft of filesToUpload) {
+        await onUpload(
+          draft.file.name,
+          draft.tipo,
+          draft.file.size,
+          draft.base64,
+          draft.file,
+          draft.descricao
+        );
+      }
+      setUploadSuccess(`${filesToUpload.length} documento(s) carregado(s) com sucesso!`);
       setTimeout(() => setUploadSuccess(''), 5000);
-      setFileToUpload(null);
-      setUploadDescricao('');
+      setFilesToUpload([]);
     } catch (err: any) {
-      setUploadError(err.message || 'Erro durante a persistência do documento.');
-      setFileToUpload(null);
+      setUploadError(err.message || 'Erro durante a persistência dos documentos.');
     }
   };
 
@@ -251,14 +278,15 @@ export default function DownloadsSection({
     e.stopPropagation();
     setDragActive(false);
 
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      processUploadedFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      processUploadedFiles(e.dataTransfer.files);
     }
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.value && e.target.files && e.target.files[0]) {
-      processUploadedFile(e.target.files[0]);
+    if (e.target.files && e.target.files.length > 0) {
+      processUploadedFiles(e.target.files);
+      e.target.value = '';
     }
   };
 
@@ -400,10 +428,13 @@ export default function DownloadsSection({
                 onChange={(e) => setSelectedType(e.target.value as DocumentType)}
                 className="w-full p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs dark:bg-slate-800 dark:border-slate-700 text-slate-800 dark:text-slate-250 outline-none focus:border-teal-500 focus:bg-white"
               >
-                <option value="contrato">Contratos, Termos e Aditivos</option>
-                <option value="prestacao">Prestações de Contas Oficiais</option>
-                <option value="extrato">Extratos Financeiros Mensais</option>
-                <option value="outro">Outros Documentos Importantes</option>
+                <option value="oficio">Ofício</option>
+                <option value="ordem_bancaria">Ordem Bancária</option>
+                <option value="outros">Outros</option>
+                <option value="parecer_juridico">Parecer Jurídico</option>
+                <option value="plano_de_trabalho">Plano de Trabalho</option>
+                <option value="portaria">Portaria</option>
+                <option value="termo_cooperacao">Termo de Cooperação e Aditivos</option>
               </select>
             </div>
 
@@ -424,6 +455,7 @@ export default function DownloadsSection({
                 id="file-upload-input"
                 ref={fileInputRef}
                 type="file"
+                multiple
                 accept=".pdf,application/pdf"
                 onChange={handleFileInputChange}
                 className="hidden"
@@ -636,35 +668,76 @@ export default function DownloadsSection({
       )}
 
       {/* Modal de Confirmação de Upload */}
-      {fileToUpload && (
+      {filesToUpload.length > 0 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 sm:p-6">
-          <div className="flex w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+          <div className="flex w-full max-w-2xl max-h-[90vh] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
             <div className="border-b border-slate-100 dark:border-slate-800 px-5 py-4">
-              <h3 className="font-bold text-slate-800 dark:text-white">Confirmar Upload</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Adicione uma descrição ao documento (Opcional)</p>
+              <h3 className="font-bold text-slate-800 dark:text-white">Confirmar Upload de Documentos</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Classifique a categoria e adicione observações para cada arquivo.</p>
             </div>
-            <div className="p-5 space-y-4">
-              <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 break-all">{fileToUpload.file.name}</p>
-                <p className="text-xs text-slate-500">{formatBytes(fileToUpload.file.size)}</p>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 dark:text-slate-400">Descrição / Observações</label>
-                <textarea
-                  value={uploadDescricao}
-                  onChange={(e) => setUploadDescricao(e.target.value)}
-                  placeholder="Ex: Termo aditivo de contrato número 123..."
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 outline-none focus:border-teal-500 min-h-[100px]"
-                />
-              </div>
+            <div className="p-5 space-y-4 overflow-y-auto bg-slate-100/50 dark:bg-slate-950/50">
+              {filesToUpload.map((draft, index) => (
+                <div key={index} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 shadow-sm">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-teal-500" />
+                      <div>
+                        <p className="text-sm font-bold text-slate-700 dark:text-slate-200 break-all">{draft.file.name}</p>
+                        <p className="text-xs font-mono text-slate-400">{formatBytes(draft.file.size)}</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => setFilesToUpload(prev => prev.filter((_, i) => i !== index))}
+                      className="text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 p-1.5 rounded-lg transition"
+                      title="Remover arquivo"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Categoria</label>
+                      <select 
+                        value={draft.tipo}
+                        onChange={e => {
+                          const newFiles = [...filesToUpload];
+                          newFiles[index].tipo = e.target.value as DocumentType;
+                          setFilesToUpload(newFiles);
+                        }}
+                        className="w-full p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs dark:bg-slate-900 dark:border-slate-700 text-slate-800 dark:text-slate-200 outline-none focus:border-teal-500 focus:bg-white transition"
+                      >
+                        <option value="oficio">Ofício</option>
+                        <option value="ordem_bancaria">Ordem Bancária</option>
+                        <option value="outros">Outros</option>
+                        <option value="parecer_juridico">Parecer Jurídico</option>
+                        <option value="plano_de_trabalho">Plano de Trabalho</option>
+                        <option value="portaria">Portaria</option>
+                        <option value="termo_cooperacao">Termo de Cooperação e Aditivos</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Observações</label>
+                      <input 
+                        type="text"
+                        value={draft.descricao}
+                        onChange={e => {
+                          const newFiles = [...filesToUpload];
+                          newFiles[index].descricao = e.target.value;
+                          setFilesToUpload(newFiles);
+                        }}
+                        className="w-full p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs dark:bg-slate-900 dark:border-slate-700 text-slate-800 dark:text-slate-200 outline-none focus:border-teal-500 focus:bg-white transition"
+                        placeholder="Opcional..."
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="flex gap-3 bg-slate-50 dark:bg-slate-950 p-5">
+            <div className="flex gap-3 bg-white dark:bg-slate-900 p-5 border-t border-slate-100 dark:border-slate-800">
               <button
-                onClick={() => {
-                  setFileToUpload(null);
-                  setUploadDescricao('');
-                }}
-                className="flex-1 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 py-2.5 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                onClick={() => setFilesToUpload([])}
+                className="flex-1 rounded-xl bg-slate-100 dark:bg-slate-800 border-transparent py-2.5 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition"
               >
                 Cancelar
               </button>
@@ -673,7 +746,7 @@ export default function DownloadsSection({
                 disabled={isLoading}
                 className="flex-1 rounded-xl bg-teal-600 py-2.5 text-sm font-bold text-white hover:bg-teal-700 transition disabled:opacity-50"
               >
-                {isLoading ? 'Enviando...' : 'Confirmar'}
+                {isLoading ? 'Enviando...' : `Confirmar ${filesToUpload.length} arquivo(s)`}
               </button>
             </div>
           </div>
@@ -696,10 +769,13 @@ export default function DownloadsSection({
                   onChange={(e) => setEditType(e.target.value as DocumentType)}
                   className="w-full p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs dark:bg-slate-800 dark:border-slate-700 text-slate-800 dark:text-slate-250 outline-none focus:border-teal-500 focus:bg-white"
                 >
-                  <option value="contrato">Contratos, Termos e Aditivos</option>
-                  <option value="prestacao">Prestações de Contas Oficiais</option>
-                  <option value="extrato">Extratos Financeiros Mensais</option>
-                  <option value="outro">Outros Documentos Importantes</option>
+                  <option value="oficio">Ofício</option>
+                  <option value="ordem_bancaria">Ordem Bancária</option>
+                  <option value="outros">Outros</option>
+                  <option value="parecer_juridico">Parecer Jurídico</option>
+                  <option value="plano_de_trabalho">Plano de Trabalho</option>
+                  <option value="portaria">Portaria</option>
+                  <option value="termo_cooperacao">Termo de Cooperação e Aditivos</option>
                 </select>
               </div>
 
