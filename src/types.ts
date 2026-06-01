@@ -24,7 +24,7 @@ export interface PlanoTrabalho {
   created_at: string;
 }
 
-export type DocumentType = 'oficio' | 'ordem_bancaria' | 'outros' | 'parecer_juridico' | 'plano_de_trabalho' | 'portaria' | 'termo_cooperacao';
+export type DocumentType = 'oficio' | 'ordem_bancaria' | 'outros' | 'parecer_juridico' | 'plano_de_trabalho' | 'portaria' | 'termo_cooperacao' | 'contrato';
 
 export interface DownloadItem {
   id: string;

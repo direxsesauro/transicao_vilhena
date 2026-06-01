@@ -34,7 +34,7 @@ export default function DownloadsSection({
   isLoading,
   isSupabaseActive
 }: DownloadsSectionProps) {
-  const [selectedType, setSelectedType] = useState<DocumentType>('oficio');
+  const [selectedType, setSelectedType] = useState<DocumentType>('contrato');
   const [searchTerm, setSearchTerm] = useState('');
   const [dragActive, setDragActive] = useState(false);
   const [uploadError, setUploadError] = useState('');
@@ -56,7 +56,7 @@ export default function DownloadsSection({
   // Estados para Edição
   const [docToEdit, setDocToEdit] = useState<DownloadItem | null>(null);
   const [editDescricao, setEditDescricao] = useState('');
-  const [editType, setEditType] = useState<DocumentType>('oficio');
+  const [editType, setEditType] = useState<DocumentType>('contrato');
   const [editFile, setEditFile] = useState<{ file: File, base64: string } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -75,6 +75,12 @@ export default function DownloadsSection({
   // Badge visual para o tipo de documento
   const getDocTypeBadge = (tipo: DocumentType) => {
     switch (tipo) {
+      case 'contrato':
+        return (
+          <span className="inline-flex items-center gap-1 rounded-md bg-orange-50 px-2.5 py-1 text-[10px] font-semibold text-orange-700 dark:bg-orange-950/40 dark:text-orange-300">
+            Contrato
+          </span>
+        );
       case 'oficio':
         return (
           <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2.5 py-1 text-[10px] font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
@@ -428,6 +434,7 @@ export default function DownloadsSection({
                 onChange={(e) => setSelectedType(e.target.value as DocumentType)}
                 className="w-full p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs dark:bg-slate-800 dark:border-slate-700 text-slate-800 dark:text-slate-250 outline-none focus:border-teal-500 focus:bg-white"
               >
+                <option value="contrato">Contrato</option>
                 <option value="oficio">Ofício</option>
                 <option value="ordem_bancaria">Ordem Bancária</option>
                 <option value="outros">Outros</option>
@@ -705,8 +712,9 @@ export default function DownloadsSection({
                           newFiles[index].tipo = e.target.value as DocumentType;
                           setFilesToUpload(newFiles);
                         }}
-                        className="w-full p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs dark:bg-slate-900 dark:border-slate-700 text-slate-800 dark:text-slate-200 outline-none focus:border-teal-500 focus:bg-white transition"
+                        className="w-full p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs dark:bg-slate-900 dark:border-slate-700 text-slate-800 dark:text-slate-250 outline-none focus:border-teal-500 focus:bg-white transition"
                       >
+                        <option value="contrato">Contrato</option>
                         <option value="oficio">Ofício</option>
                         <option value="ordem_bancaria">Ordem Bancária</option>
                         <option value="outros">Outros</option>
@@ -769,6 +777,7 @@ export default function DownloadsSection({
                   onChange={(e) => setEditType(e.target.value as DocumentType)}
                   className="w-full p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs dark:bg-slate-800 dark:border-slate-700 text-slate-800 dark:text-slate-250 outline-none focus:border-teal-500 focus:bg-white"
                 >
+                  <option value="contrato">Contrato</option>
                   <option value="oficio">Ofício</option>
                   <option value="ordem_bancaria">Ordem Bancária</option>
                   <option value="outros">Outros</option>
